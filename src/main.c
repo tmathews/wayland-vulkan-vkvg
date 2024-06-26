@@ -622,7 +622,6 @@ int main(int argc, char** argv)
             destroySwapchain();
             createSwapchain();
             continue;
-            // TODO
         }
         else if (result < 0)
         {
@@ -700,7 +699,6 @@ int main(int argc, char** argv)
             CHECK_VK_RESULT(vkDeviceWaitIdle(device));
             destroySwapchain();
             createSwapchain();
-            // TODO
         }
         else if (result < 0)
         {
