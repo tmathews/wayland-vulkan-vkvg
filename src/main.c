@@ -34,6 +34,17 @@ struct SwapchainElement
 };
 
 static const char* const appName = "Wayland Vulkan Example";
+static const char* const instanceExtensionNames[] = {
+    "VK_EXT_debug_utils",
+    "VK_KHR_surface",
+    "VK_KHR_wayland_surface"
+};
+static const char* const deviceExtensionNames[] = {
+    "VK_KHR_swapchain"
+};
+static const char* const layerNames[] = {
+    "VK_LAYER_KHRONOS_validation"
+};
 static VkInstance instance = VK_NULL_HANDLE;
 static VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 static VkSurfaceKHR vulkanSurface = VK_NULL_HANDLE;
@@ -393,16 +404,6 @@ int main(int argc, char** argv)
     VkResult result;
 
     {
-        const char* const extensionNames[] = {
-            "VK_EXT_debug_utils",
-            "VK_KHR_surface",
-            "VK_KHR_wayland_surface"
-        };
-
-        const char* const layerNames[] = {
-            "VK_LAYER_KHRONOS_validation"
-        };
-
         VkApplicationInfo appInfo = {0};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
         appInfo.pApplicationName = appName;
@@ -414,10 +415,35 @@ int main(int argc, char** argv)
         VkInstanceCreateInfo createInfo = {0};
         createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         createInfo.pApplicationInfo = &appInfo;
-        createInfo.enabledExtensionCount = sizeof(extensionNames) / sizeof(const char*);
-        createInfo.ppEnabledExtensionNames = extensionNames;
-        createInfo.enabledLayerCount = sizeof(layerNames) / sizeof(const char*);
-        createInfo.ppEnabledLayerNames = layerNames;
+        createInfo.enabledExtensionCount = sizeof(instanceExtensionNames) / sizeof(const char*);
+        createInfo.ppEnabledExtensionNames = instanceExtensionNames;
+
+        size_t foundLayers = 0;
+
+        uint32_t deviceLayerCount;
+        CHECK_VK_RESULT(vkEnumerateInstanceLayerProperties(&deviceLayerCount, NULL));
+
+        VkLayerProperties* layerProperties = malloc(deviceLayerCount * sizeof(VkLayerProperties));
+        CHECK_VK_RESULT(vkEnumerateInstanceLayerProperties(&deviceLayerCount, layerProperties));
+
+        for (uint32_t i = 0; i < deviceLayerCount; i++)
+        {
+            for (size_t j = 0; j < sizeof(layerNames) / sizeof(const char*); j++)
+            {
+                if (strcmp(layerProperties[i].layerName, layerNames[j]) == 0)
+                {
+                    foundLayers++;
+                }
+            }
+        }
+
+        free(layerProperties);
+
+        if (foundLayers >= sizeof(layerNames) / sizeof(const char*))
+        {
+            createInfo.enabledLayerCount = sizeof(layerNames) / sizeof(const char*);
+            createInfo.ppEnabledLayerNames = layerNames;
+        }
 
         CHECK_VK_RESULT(vkCreateInstance(&createInfo, NULL, &instance));
     }
@@ -487,10 +513,6 @@ int main(int argc, char** argv)
     }
 
     {
-        const char* const extensionNames[] = { "VK_KHR_swapchain" };
-
-        const char* const layerNames[] = { "VK_LAYER_KHRONOS_validation" };
-
         uint32_t queueFamilyCount;
         vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamilyCount, NULL);
 
@@ -522,10 +544,35 @@ int main(int argc, char** argv)
         createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         createInfo.queueCreateInfoCount = 1;
         createInfo.pQueueCreateInfos = &queueCreateInfo;
-        createInfo.enabledExtensionCount = sizeof(extensionNames) / sizeof(const char*);
-        createInfo.ppEnabledExtensionNames = extensionNames;
-        createInfo.enabledLayerCount = sizeof(layerNames) / sizeof(const char*);
-        createInfo.ppEnabledLayerNames = layerNames;
+        createInfo.enabledExtensionCount = sizeof(deviceExtensionNames) / sizeof(const char*);
+        createInfo.ppEnabledExtensionNames = deviceExtensionNames;
+
+        uint32_t deviceLayerCount;
+        CHECK_VK_RESULT(vkEnumerateDeviceLayerProperties(physDevice, &deviceLayerCount, NULL));
+
+        VkLayerProperties* layerProperties = malloc(deviceLayerCount * sizeof(VkLayerProperties));
+        CHECK_VK_RESULT(vkEnumerateDeviceLayerProperties(physDevice, &deviceLayerCount, layerProperties));
+
+        size_t foundLayers = 0;
+
+        for (uint32_t i = 0; i < deviceLayerCount; i++)
+        {
+            for (size_t j = 0; j < sizeof(layerNames) / sizeof(const char*); j++)
+            {
+                if (strcmp(layerProperties[i].layerName, layerNames[j]) == 0)
+                {
+                    foundLayers++;
+                }
+            }
+        }
+
+        free(layerProperties);
+
+        if (foundLayers >= sizeof(layerNames) / sizeof(const char*))
+        {
+            createInfo.enabledLayerCount = sizeof(layerNames) / sizeof(const char*);
+            createInfo.ppEnabledLayerNames = layerNames;
+        }
 
         CHECK_VK_RESULT(vkCreateDevice(physDevice, &createInfo, NULL, &device));
 
@@ -569,7 +616,15 @@ int main(int argc, char** argv)
         CHECK_VK_RESULT(vkWaitForFences(device, 1, &currentElement->fence, 1, UINT64_MAX));
         result = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, currentElement->startSemaphore, NULL, &imageIndex);
 
-        if (result != VK_SUBOPTIMAL_KHR)
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            CHECK_VK_RESULT(vkDeviceWaitIdle(device));
+            destroySwapchain();
+            createSwapchain();
+            continue;
+            // TODO
+        }
+        else if (result < 0)
         {
             CHECK_VK_RESULT(result);
         }
@@ -640,7 +695,14 @@ int main(int argc, char** argv)
 
         result = vkQueuePresentKHR(queue, &presentInfo);
 
-        if (result != VK_SUBOPTIMAL_KHR)
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+        {
+            CHECK_VK_RESULT(vkDeviceWaitIdle(device));
+            destroySwapchain();
+            createSwapchain();
+            // TODO
+        }
+        else if (result < 0)
         {
             CHECK_VK_RESULT(result);
         }
