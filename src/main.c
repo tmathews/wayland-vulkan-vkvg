@@ -194,7 +194,8 @@ float ox, oy = 0;
 
 void draw(VkvgContext ctx)
 {
-	vkvg_set_source_rgb(ctx, 0, 0, 0);
+	vkvg_clear(ctx);
+	vkvg_set_source_rgba(ctx, 1, 0, 0, 0.5);
 	vkvg_paint(ctx);
 
 	vkvg_set_font_size(ctx, 16);
@@ -341,7 +342,7 @@ static void createSwapchain(VkvgSurface *vkvg_surf)
 		// createInfo.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 		createInfo.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE;
 		createInfo.preTransform             = capabilities.currentTransform;
-		createInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+		createInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR; // VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 		createInfo.presentMode              = VK_PRESENT_MODE_MAILBOX_KHR;
 		createInfo.clipped                  = 1;
 		// NOTE in vkh they check if existing swapchain exists and destroys it
